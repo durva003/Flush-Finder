@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Add Washroom – FlushFind</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; min-height: 100vh; }
+
+    .header { background: white; padding: 16px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #eee; }
+    .back { color: #1D9E75; text-decoration: none; font-size: 20px; }
+    .header-title { font-size: 16px; font-weight: 600; color: #1a1a1a; }
+
+    .main { max-width: 600px; margin: 0 auto; padding: 24px 16px; }
+
+    .form-card { background: white; border-radius: 14px; padding: 24px; border: 1px solid #eee; }
+    .form-title { font-size: 18px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px; }
+    .form-sub { font-size: 13px; color: #888; margin-bottom: 24px; }
+
+    .field { margin-bottom: 18px; }
+    label { font-size: 13px; font-weight: 600; color: #555; display: block; margin-bottom: 6px; }
+    input, select { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.15s; }
+    input:focus, select:focus { border-color: #1D9E75; }
+
+    .btn { width: 100%; padding: 12px; background: #1D9E75; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    .btn:hover { background: #0F6E56; }
+
+    .success { display: none; background: #E1F5EE; color: #0F6E56; padding: 12px 16px; border-radius: 8px; margin-top: 16px; font-size: 14px; font-weight: 500; }
+    .error   { display: none; background: #FCEBEB; color: #A32D2D; padding: 12px 16px; border-radius: 8px; margin-top: 16px; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <a class="back" href="/">←</a>
+    <div class="header-title">Add a Washroom</div>
+  </div>
+
+  <div class="main">
+    <div class="form-card">
+      <div class="form-title">➕ New Washroom</div>
+      <div class="form-sub">Know a washroom? Add it to help others find it!</div>
+
+      <div class="field">
+        <label>Washroom Name</label>
+        <input type="text" id="w-name" placeholder="e.g. Marina Mall – Level 2" required/>
+      </div>
+      <div class="field">
+        <label>Location</label>
+        <input type="text" id="w-location" placeholder="e.g. Near food court, Gate 3" required/>
+      </div>
+      <div class="field">
+        <label>Latitude</label>
+        <input type="number" step="any" id="w-lat" placeholder="e.g. 19.0760"/>
+      </div>
+      <div class="field">
+        <label>Longitude</label>
+        <input type="number" step="any" id="w-lng" placeholder="e.g. 72.8777"/>
+      </div>
+      <div class="field">
+        <label>Status</label>
+        <select id="w-status">
+          <option value="open">Open</option>
+          <option value="busy">Busy</option>
+          <option value="closed">Closed</option>
+        </select>
+      </div>
+
+      <button class="btn" onclick="submitForm()">Add Washroom</button>
+      <div class="success" id="success-msg">✅ Washroom added! Redirecting...</div>
+      <div class="error"   id="error-msg">❌ Something went wrong. Try again!</div>
+    </div>
+  </div>
+
+  <script>
+function submitForm() {
+  const name     = document.getElementById("w-name").value.trim();
+  const location = document.getElementById("w-location").value.trim();
+  const status   = document.getElementById("w-status").value;
+  const lat      = parseFloat(document.getElementById("w-lat").value) || 0.0;
+  const lng      = parseFloat(document.getElementById("w-lng").value) || 0.0;
+  if (!name || !location) { alert("Please fill in all fields!"); return; }
+
+  fetch("/api/washrooms", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, location, status, lat, lng })
+  })
+  .then(r => r.json())
+  .then(() => {
+    document.getElementById("success-msg").style.display = "block";
+    setTimeout(() => window.location.href = "/", 1500);
+  })
+  .catch(() => {
+    document.getElementById("error-msg").style.display = "block";
+  });
+}
+  </script>
+
+</body>
+</html>

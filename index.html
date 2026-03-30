@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FlushFinder</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; min-height: 100vh; }
+    .header { background: white; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #eee; position: sticky; top: 0; z-index: 1000; }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon { width: 36px; height: 36px; background: #1D9E75; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .logo-text { font-size: 20px; font-weight: 800; color: #1D9E75; letter-spacing: -0.5px; }
+    .logo-sub { font-size: 11px; color: #aaa; }
+    .nav-btns { display: flex; gap: 8px; }
+    .btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer; border: none; }
+    .btn-primary { background: #1D9E75; color: white; }
+    .btn-outline { background: white; color: #1D9E75; border: 1.5px solid #1D9E75; }
+    .toolbar { background: white; padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 8px; align-items: center; position: sticky; top: 69px; z-index: 999; }
+    .search-bar { flex: 1; background: #f5f5f0; border: 1px solid #eee; border-radius: 10px; padding: 8px 14px; display: flex; align-items: center; gap: 8px; }
+    .search-bar input { border: none; outline: none; font-size: 14px; flex: 1; background: transparent; color: #1a1a1a; }
+    .view-toggle { display: flex; background: #f5f5f0; border-radius: 8px; padding: 3px; gap: 2px; flex-shrink: 0; }
+    .toggle-btn { padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: #888; transition: all 0.15s; }
+    .toggle-btn.active { background: white; color: #1a1a1a; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    .filters { background: white; padding: 10px 16px; border-bottom: 1px solid #eee; display: flex; gap: 8px; overflow-x: auto; }
+    .filters::-webkit-scrollbar { display: none; }
+    .filter-btn { padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid #eee; background: white; color: #666; white-space: nowrap; transition: all 0.15s; flex-shrink: 0; }
+    .filter-btn.active { border-color: #1D9E75; background: #f0fdf8; color: #0F6E56; }
+    .mode-bar { background: white; padding: 10px 16px; border-bottom: 1px solid #eee; display: none; }
+    .mode-toggle { display: flex; background: #f5f5f0; border-radius: 10px; padding: 3px; gap: 3px; }
+    .mode-btn { flex: 1; padding: 8px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; background: transparent; color: #888; transition: all 0.2s; }
+    .mode-btn.active { background: white; color: #1a1a1a; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    .route-bar { background: white; padding: 12px 16px; border-bottom: 1px solid #eee; display: none; flex-direction: column; gap: 8px; }
+    .route-bar.visible { display: flex; }
+    .route-row { display: flex; gap: 10px; align-items: center; }
+    .route-input-wrap { flex: 1; position: relative; }
+    .route-input-wrap input { width: 100%; padding: 10px 14px; border: 1.5px solid #eee; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; background: #f5f5f0; }
+    .route-input-wrap input:focus { border-color: #1D9E75; background: white; }
+    .route-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+    .route-btn { padding: 10px 24px; background: #1D9E75; color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .route-btn:hover { background: #0F6E56; }
+    .clear-btn { padding: 10px 14px; background: white; color: #888; border: 1.5px solid #eee; border-radius: 10px; font-size: 13px; cursor: pointer; }
+    .use-location-btn { padding: 8px 12px; background: #EBF5FF; color: #0C447C; border: none; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+    #list-view { display: none; }
+    .main { max-width: 600px; margin: 0 auto; padding: 20px 16px; }
+    .section-title { font-size: 12px; font-weight: 700; color: #bbb; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 12px; }
+    .card { background: white; border-radius: 14px; margin-bottom: 12px; border: 1.5px solid #f0f0f0; overflow: hidden; transition: all 0.2s; }
+    .card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.07); transform: translateY(-1px); }
+    .card-main { padding: 16px; cursor: pointer; }
+    .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+    .card-name { font-size: 15px; font-weight: 700; color: #1a1a1a; }
+    .card-rating { font-size: 13px; color: #EF9F27; font-weight: 700; background: #FFF8EC; padding: 3px 8px; border-radius: 8px; }
+    .card-location { font-size: 13px; color: #aaa; margin-bottom: 10px; }
+    .card-bottom { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .status-badge { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; }
+    .status-open   { background: #f0fdf8; color: #0F6E56; }
+    .status-busy   { background: #FFFBEB; color: #854F0B; }
+    .status-closed { background: #FEF2F2; color: #A32D2D; }
+    .review-count { font-size: 12px; color: #ccc; }
+    .expand-btn { margin-left: auto; font-size: 12px; color: #1D9E75; font-weight: 600; }
+    .ai-btn { font-size: 11px; color: #7F77DD; cursor: pointer; font-weight: 700; padding: 3px 9px; border: 1.5px solid #E8E6FC; border-radius: 20px; background: #F5F4FE; }
+    .ai-result { margin: 0 16px 14px; background: #F5F4FE; border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #3C3489; display: none; line-height: 1.6; border: 1px solid #E8E6FC; }
+    .reviews-panel { display: none; border-top: 1px solid #f5f5f5; padding: 14px 16px; background: #fafaf8; }
+    .reviews-panel.open { display: block; }
+    .review-item { padding: 10px 0; border-bottom: 1px solid #f5f5f5; }
+    .review-item:last-child { border-bottom: none; }
+    .review-top { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .review-user { font-size: 13px; font-weight: 700; color: #1a1a1a; }
+    .review-stars { font-size: 12px; color: #EF9F27; }
+    .review-text { font-size: 13px; color: #888; line-height: 1.5; }
+    .no-reviews { font-size: 13px; color: #ccc; text-align: center; padding: 12px 0; }
+    .empty { text-align: center; padding: 40px 20px; color: #ccc; }
+    .empty p { margin-bottom: 16px; font-size: 15px; }
+    #map-view { display: block; position: relative; }
+    #map { height: calc(100vh - 320px); width: 100%; }
+    .map-count { position: absolute; top: 16px; right: 16px; z-index: 1000; background: white; border-radius: 10px; padding: 8px 14px; border: 1px solid #eee; font-size: 12px; font-weight: 600; color: #555; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .map-legend { position: absolute; bottom: 24px; left: 16px; z-index: 1000; background: white; border-radius: 12px; padding: 12px 14px; border: 1px solid #eee; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .legend-title { font-size: 10px; font-weight: 700; color: #bbb; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: #555; font-weight: 500; }
+    .legend-item:last-child { margin-bottom: 0; }
+    .map-nearby { display: none; position: absolute; bottom: 24px; right: 16px; z-index: 1000; background: white; border-radius: 12px; padding: 12px 14px; border: 1px solid #eee; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); max-width: 220px; }
+    .popup-name { font-size: 14px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px; }
+    .popup-location { font-size: 12px; color: #aaa; margin-bottom: 6px; }
+    .popup-row { display: flex; align-items: center; gap: 8px; }
+    .popup-status { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+    .popup-rating { font-size: 12px; color: #EF9F27; font-weight: 700; }
+    .suggestions { display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1.5px solid #eee; border-radius: 10px; margin-top: 4px; z-index: 9999; box-shadow: 0 8px 24px rgba(0,0,0,0.1); max-height: 200px; overflow-y: auto; }
+    .suggestion-item { padding: 10px 14px; cursor: pointer; font-size: 13px; color: #1a1a1a; border-bottom: 0.5px solid #f5f5f5; font-weight: 500; }
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-item:hover { background: #f0fdf8; color: #0F6E56; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">🚻</div>
+      <div>
+        <div class="logo-text">FlushFinder</div>
+        <div class="logo-sub">Find clean washrooms near you</div>
+      </div>
+    </div>
+    <div class="nav-btns">
+      <a href="/add" class="btn btn-primary">+ Add</a>
+      <a href="/review" class="btn btn-outline">⭐ Review</a>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-bar">
+      <span>🔍</span>
+      <input type="text" id="search" placeholder="Search washrooms..." oninput="applyFilters()"/>
+    </div>
+    <div class="view-toggle">
+      <button class="toggle-btn active" id="map-btn" onclick="switchView('map')">🗺️ Map</button>
+      <button class="toggle-btn" id="list-btn" onclick="switchView('list')">📋 List</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+    <button class="filter-btn" onclick="setFilter('open', this)">🟢 Open</button>
+    <button class="filter-btn" onclick="setFilter('busy', this)">🟡 Busy</button>
+    <button class="filter-btn" onclick="setFilter('closed', this)">🔴 Closed</button>
+  </div>
+
+  <div class="mode-bar" id="mode-bar">
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="car-btn" onclick="setMode('car')">🚗 Car — malls, gas stations, fast food</button>
+      <button class="mode-btn" id="walk-btn" onclick="setMode('walk')">🚶 Walk — all washrooms nearby</button>
+    </div>
+  </div>
+
+  <div class="route-bar" id="route-bar">
+    <div class="route-row">
+      <svg width="22" height="28" viewBox="0 0 28 36" fill="none" style="flex-shrink:0">
+        <path d="M14 0C6.27 0 0 6.27 0 14C0 24.5 14 36 14 36S28 24.5 28 14C28 6.27 21.73 0 14 0Z" fill="#378ADD"/>
+        <circle cx="14" cy="14" r="7" fill="white"/>
+      </svg>
+      <div class="route-input-wrap">
+        <input type="text" id="start-input" placeholder="Start: your location (auto-detected)" oninput="searchStart()" autocomplete="off"/>
+        <div class="suggestions" id="start-suggestions"></div>
+      </div>
+      <button class="use-location-btn" onclick="useMyLocation()">📍 Me</button>
+    </div>
+    <div style="height:10px;margin-left:11px;border-left:2px dashed #ddd;"></div>
+    <div class="route-row">
+      <svg width="22" height="28" viewBox="0 0 28 36" fill="none" style="flex-shrink:0">
+        <path d="M14 0C6.27 0 0 6.27 0 14C0 24.5 14 36 14 36S28 24.5 28 14C28 6.27 21.73 0 14 0Z" fill="#534AB7"/>
+        <circle cx="14" cy="14" r="7" fill="white"/>
+      </svg>
+      <div class="route-input-wrap">
+        <input type="text" id="destination" placeholder="Destination: where are you going?" oninput="searchDest()" autocomplete="off"/>
+        <div class="suggestions" id="dest-suggestions"></div>
+      </div>
+    </div>
+    <div class="route-actions">
+      <button class="clear-btn" onclick="clearRoute()">✕ Clear</button>
+      <button class="route-btn" id="find-route-btn" onclick="findRoute()">🚗 Find Route →</button>
+    </div>
+  </div>
+
+  <div id="list-view">
+    <div class="main">
+      <div class="section-title" id="results-count"></div>
+      <div id="washroom-list"></div>
+    </div>
+  </div>
+
+  <div id="map-view">
+    <div id="map"></div>
+    <div class="map-count" id="map-count">Loading...</div>
+    <div class="map-legend">
+      <div class="legend-title">Status</div>
+      <div class="legend-item">
+        <svg width="12" height="16" viewBox="0 0 28 36" fill="none"><path d="M14 0C6.27 0 0 6.27 0 14C0 24.5 14 36 14 36S28 24.5 28 14C28 6.27 21.73 0 14 0Z" fill="#1D9E75"/><circle cx="14" cy="14" r="7" fill="white"/></svg>Open
+      </div>
+      <div class="legend-item">
+        <svg width="12" height="16" viewBox="0 0 28 36" fill="none"><path d="M14 0C6.27 0 0 6.27 0 14C0 24.5 14 36 14 36S28 24.5 28 14C28 6.27 21.73 0 14 0Z" fill="#EF9F27"/><circle cx="14" cy="14" r="7" fill="white"/></svg>Busy
+      </div>
+      <div class="legend-item">
+        <svg width="12" height="16" viewBox="0 0 28 36" fill="none"><path d="M14 0C6.27 0 0 6.27 0 14C0 24.5 14 36 14 36S28 24.5 28 14C28 6.27 21.73 0 14 0Z" fill="#E24B4A"/><circle cx="14" cy="14" r="7" fill="white"/></svg>Closed
+      </div>
+      <div style="border-top:0.5px solid #eee;margin-top:8px;padding-top:8px;">
+        <div class="legend-item">
+          <div style="width:16px;height:16px;background:#378ADD;border-radius:50%;border:3px solid white;box-shadow:0 0 0 3px rgba(55,138,221,0.25);flex-shrink:0;"></div>You
+        </div>
+        <div class="legend-item">
+          <svg width="12" height="16" viewBox="0 0 28 36" fill="none"><path d="M14 0C6.27 0 0 6.27 0 14C0 24.5 14 36 14 36S28 24.5 28 14C28 6.27 21.73 0 14 0Z" fill="#534AB7"/><circle cx="14" cy="14" r="7" fill="white"/></svg>Destination
+        </div>
+      </div>
+    </div>
+    <div class="map-nearby" id="map-nearby"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjgzOWQ2ZGVkZDVhMTQwMDNhMTY1YjdjNjY5YzM4NTc4IiwiaCI6Im11cm11cjY0In0=";
+
+    let allWashrooms=[], activeFilter="all", currentMode="car";
+    let mapInitialized=false, map, markers=[];
+    let userLat=null, userLng=null, startLat=null, startLng=null;
+    let routeLayer=null, destMarker=null, startMarker=null, userMarker=null;
+    let selectedDest=null, destTimeout=null, startTimeout=null;
+
+    function getColor(s){ return s==="open"?"#1D9E75":s==="busy"?"#EF9F27":"#E24B4A"; }
+    function starsDisplay(n){ return "★".repeat(n)+"☆".repeat(5-n); }
+
+    function makePinIcon(color, size=22){
+      const h=Math.round(size*1.3);
+      return L.divIcon({
+        className:"",
+        html:`<svg width="${size}" height="${h}" viewBox="0 0 28 36" fill="none"><path d="M14 0C6.27 0 0 6.27 0 14C0 24.5 14 36 14 36S28 24.5 28 14C28 6.27 21.73 0 14 0Z" fill="${color}" stroke="white" stroke-width="2"/><circle cx="14" cy="14" r="7" fill="white"/></svg>`,
+        iconSize:[size,h], iconAnchor:[size/2,h]
+      });
+    }
+
+    function setMode(mode){
+      currentMode=mode;
+      document.getElementById("car-btn").classList.toggle("active", mode==="car");
+      document.getElementById("walk-btn").classList.toggle("active", mode==="walk");
+      document.getElementById("find-route-btn").textContent=mode==="car"?"🚗 Find Route →":"🚶 Find Route →";
+      applyFilters();
+      updateNearbyPanel();
+    }
+
+    function switchView(view){
+      if(view==="map"){
+        document.getElementById("list-view").style.display="none";
+        document.getElementById("map-view").style.display="block";
+        document.getElementById("route-bar").classList.add("visible");
+        document.getElementById("mode-bar").style.display="block";
+        document.getElementById("map-btn").classList.add("active");
+        document.getElementById("list-btn").classList.remove("active");
+        if(!mapInitialized) initMap();
+      } else {
+        document.getElementById("list-view").style.display="block";
+        document.getElementById("map-view").style.display="none";
+        document.getElementById("route-bar").classList.remove("visible");
+        document.getElementById("mode-bar").style.display="none";
+        document.getElementById("list-btn").classList.add("active");
+        document.getElementById("map-btn").classList.remove("active");
+      }
+    }
+
+    function applyFilters(){
+      const q=document.getElementById("search").value.toLowerCase();
+      let filtered=allWashrooms;
+      if(activeFilter!=="all") filtered=filtered.filter(w=>w.status===activeFilter);
+      if(q) filtered=filtered.filter(w=>w.name.toLowerCase().includes(q)||w.location.toLowerCase().includes(q));
+      if(currentMode==="car") filtered=filtered.filter(w=>w.mode==="car");
+      renderCards(filtered);
+      if(mapInitialized) renderMapMarkers(filtered);
+    }
+
+    function setFilter(filter,btn){
+      activeFilter=filter;
+      document.querySelectorAll(".filter-btn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      applyFilters();
+    }
+
+    function toggleReviews(id){
+      const panel=document.getElementById("reviews-"+id);
+      if(panel.classList.contains("open")){panel.classList.remove("open");return;}
+      panel.classList.add("open");
+      if(panel.dataset.loaded) return;
+      panel.dataset.loaded=true;
+      panel.innerHTML="<p class='no-reviews'>Loading...</p>";
+      fetch(`/api/washrooms/${id}/reviews`).then(r=>r.json()).then(reviews=>{
+        if(!reviews.length){panel.innerHTML="<p class='no-reviews'>No reviews yet!</p>";return;}
+        panel.innerHTML=reviews.map(r=>`
+          <div class="review-item">
+            <div class="review-top"><span class="review-user">${r.user}</span><span class="review-stars">${starsDisplay(r.stars)}</span></div>
+            <div class="review-text">${r.text}</div>
+          </div>`).join("");
+      });
+    }
+
+    function getAIReview(id,btn){
+      const result=document.getElementById("ai-"+id);
+      if(result.style.display==="block"){result.style.display="none";btn.textContent="🤖 AI Score";return;}
+      btn.textContent="⏳ Analyzing...";
+      fetch(`/api/washrooms/${id}/ai-review`).then(r=>r.json()).then(data=>{
+        btn.textContent="🤖 AI Score";
+        result.innerHTML=!data.score?"No reviews to analyze yet!":`<b>🤖 AI Cleanliness Score: ${data.score}/10</b><br>${data.summary}`;
+        result.style.display="block";
+      }).catch(()=>{btn.textContent="🤖 AI Score";result.innerHTML="Try again!";result.style.display="block";});
+    }
+
+    function renderCards(data){
+      const list=document.getElementById("washroom-list");
+      document.getElementById("results-count").textContent=`${data.length} washroom${data.length!==1?"s":""} found`;
+      if(!data.length){list.innerHTML=`<div class="empty"><p>No washrooms found.</p><a href="/add" class="btn btn-primary">+ Add one!</a></div>`;return;}
+      list.innerHTML=data.map(w=>`
+        <div class="card">
+          <div class="card-main" onclick="toggleReviews(${w.id})">
+            <div class="card-top">
+              <div class="card-name">${w.name}</div>
+              <div class="card-rating">⭐ ${w.rating>0?w.rating:"New"}</div>
+            </div>
+            <div class="card-location">📍 ${w.location}</div>
+            <div class="card-bottom">
+              <span class="status-badge status-${w.status}">${w.status==="open"?"🟢 Open":w.status==="busy"?"🟡 Busy":"🔴 Closed"}</span>
+              <span class="review-count">${w.review_count>0?w.review_count+" reviews":"No reviews yet"}</span>
+              <span class="ai-btn" onclick="event.stopPropagation();getAIReview(${w.id},this)">🤖 AI Score</span>
+              <span class="expand-btn">reviews ↓</span>
+            </div>
+          </div>
+          <div class="ai-result" id="ai-${w.id}"></div>
+          <div class="reviews-panel" id="reviews-${w.id}"></div>
+        </div>`).join("");
+    }
+
+    function initMap(){
+      mapInitialized=true;
+      map=L.map("map",{zoomControl:true,attributionControl:false}).setView([34.0522,-118.2437],11);
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",{maxZoom:19}).addTo(map);
+      renderMapMarkers(allWashrooms.filter(w=>w.mode==="car"));
+
+      if(navigator.geolocation){
+        navigator.geolocation.getCurrentPosition(pos=>{
+          userLat=pos.coords.latitude;
+          userLng=pos.coords.longitude;
+          startLat=userLat; startLng=userLng;
+
+          const userIcon=L.divIcon({
+            className:"",
+            html:`<div style="position:relative;width:50px;height:50px;">
+              <div style="position:absolute;top:0;left:0;width:50px;height:50px;background:rgba(55,138,221,0.15);border-radius:50%;"></div>
+              <div style="position:absolute;top:9px;left:9px;width:32px;height:32px;background:#378ADD;border:4px solid white;border-radius:50%;box-shadow:0 3px 14px rgba(55,138,221,0.6);"></div>
+              <div style="position:absolute;top:18px;left:18px;width:14px;height:14px;background:white;border-radius:50%;opacity:0.9;"></div>
+            </div>`,
+            iconSize:[50,50], iconAnchor:[25,25]
+          });
+
+          if(userMarker) map.removeLayer(userMarker);
+          userMarker=L.marker([userLat,userLng],{icon:userIcon,zIndexOffset:2000}).addTo(map).bindPopup("<b>📍 You are here</b>");
+          map.setView([userLat,userLng],13);
+          document.getElementById("start-input").value="📍 My current location";
+          updateNearbyPanel();
+        },()=>{console.log("Location denied");});
+      }
+    }
+
+    function updateNearbyPanel(){
+      if(!userLat) return;
+      const filtered=currentMode==="car"
+        ? allWashrooms.filter(w=>w.lat&&w.lng&&w.mode==="car")
+        : allWashrooms.filter(w=>w.lat&&w.lng);
+      const nearby=filtered.map(w=>({...w,dist:getDist(userLat,userLng,w.lat,w.lng)})).sort((a,b)=>a.dist-b.dist).slice(0,3);
+      const panel=document.getElementById("map-nearby");
+      panel.style.display="block";
+      panel.innerHTML=`
+        <div style="font-size:10px;font-weight:700;color:#bbb;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">${currentMode==="car"?"🚗 Nearest by car":"🚶 Nearest on foot"}</div>
+        ${nearby.map(w=>`
+          <div style="padding:7px 0;border-bottom:1px solid #f5f5f5;">
+            <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:2px;">${w.name}</div>
+            <div style="font-size:12px;color:#aaa;">${w.dist} mi · <span style="color:${getColor(w.status)};font-weight:600;">${w.status}</span></div>
+          </div>`).join("")}
+      `;
+    }
+
+    function getDist(lat1,lng1,lat2,lng2){
+      const R=3958.8,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;
+      const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+      return (R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))).toFixed(1);
+    }
+
+    function renderMapMarkers(washrooms,highlightIds=[]){
+      if(!map) return;
+      markers.forEach(m=>map.removeLayer(m));
+      markers=[];
+      const valid=washrooms.filter(w=>w.lat&&w.lng);
+      document.getElementById("map-count").textContent=`${valid.length} washrooms · ${valid.filter(w=>w.status==="open").length} open · ${currentMode==="car"?"🚗":"🚶"} mode`;
+      valid.forEach(w=>{
+        const highlight=highlightIds.includes(w.id);
+        const icon=makePinIcon(getColor(w.status),highlight?32:22);
+        const m=L.marker([w.lat,w.lng],{icon}).addTo(map);
+        m.bindPopup(`
+          <div class="popup-name">${w.name}</div>
+          <div class="popup-location">📍 ${w.location}</div>
+          <div class="popup-row">
+            <span class="popup-status status-${w.status}">${w.status}</span>
+            <span class="popup-rating">⭐ ${w.rating>0?w.rating:"No ratings yet"}</span>
+          </div>`,{maxWidth:220});
+        markers.push(m);
+      });
+    }
+
+    function useMyLocation(){
+      if(userLat){
+        startLat=userLat; startLng=userLng;
+        document.getElementById("start-input").value="📍 My current location";
+        document.getElementById("start-suggestions").style.display="none";
+        if(startMarker){map.removeLayer(startMarker);startMarker=null;}
+      } else { alert("Location not detected yet!"); }
+    }
+
+    function searchStart(){
+      const q=document.getElementById("start-input").value.trim();
+      if(q==="📍 My current location") return;
+      const box=document.getElementById("start-suggestions");
+      if(q.length<3){box.style.display="none";return;}
+      clearTimeout(startTimeout);
+      startTimeout=setTimeout(async()=>{
+        try{
+          const res=await fetch(`https://api.openrouteservice.org/geocode/autocomplete?api_key=${ORS_KEY}&text=${encodeURIComponent(q)}&boundary.country=US&size=6`);
+          const data=await res.json();
+          if(!data.features?.length){box.style.display="none";return;}
+          box.style.display="block";
+          box.innerHTML=data.features.map(f=>`<div class="suggestion-item" data-lat="${f.geometry.coordinates[1]}" data-lng="${f.geometry.coordinates[0]}" data-label="${f.properties.label}" onclick="pickStart(this)">📍 ${f.properties.label}</div>`).join("");
+        }catch(e){box.style.display="none";}
+      },300);
+    }
+
+    function searchDest(){
+      const q=document.getElementById("destination").value.trim();
+      const box=document.getElementById("dest-suggestions");
+      selectedDest=null;
+      if(q.length<3){box.style.display="none";return;}
+      clearTimeout(destTimeout);
+      destTimeout=setTimeout(async()=>{
+        try{
+          const res=await fetch(`https://api.openrouteservice.org/geocode/autocomplete?api_key=${ORS_KEY}&text=${encodeURIComponent(q)}&boundary.country=US&size=6`);
+          const data=await res.json();
+          if(!data.features?.length){box.style.display="none";return;}
+          box.style.display="block";
+          box.innerHTML=data.features.map(f=>`<div class="suggestion-item" data-lat="${f.geometry.coordinates[1]}" data-lng="${f.geometry.coordinates[0]}" data-label="${f.properties.label}" onclick="pickDest(this)">📍 ${f.properties.label}</div>`).join("");
+        }catch(e){box.style.display="none";}
+      },300);
+    }
+
+    function pickStart(item){
+      startLat=parseFloat(item.dataset.lat);
+      startLng=parseFloat(item.dataset.lng);
+      document.getElementById("start-input").value=item.dataset.label;
+      document.getElementById("start-suggestions").style.display="none";
+      if(startMarker) map.removeLayer(startMarker);
+      startMarker=L.marker([startLat,startLng],{icon:makePinIcon("#378ADD",32)}).addTo(map).bindPopup(`<b>Start: ${item.dataset.label}</b>`).openPopup();
+    }
+
+    function pickDest(item){
+      const lat=parseFloat(item.dataset.lat), lng=parseFloat(item.dataset.lng), label=item.dataset.label;
+      selectedDest={lat,lng,label};
+      document.getElementById("destination").value=label;
+      document.getElementById("dest-suggestions").style.display="none";
+      if(destMarker) map.removeLayer(destMarker);
+      destMarker=L.marker([lat,lng],{icon:makePinIcon("#534AB7",32),zIndexOffset:1000}).addTo(map).bindPopup(`<b>Destination: ${label}</b>`).openPopup();
+      map.setView([lat,lng],12);
+    }
+
+    document.addEventListener("click",e=>{
+      if(!e.target.closest(".route-bar")){
+        document.getElementById("start-suggestions").style.display="none";
+        document.getElementById("dest-suggestions").style.display="none";
+      }
+    });
+
+    function distToSegment(lat,lng,lat1,lng1,lat2,lng2){
+      const A=lat-lat1,B=lng-lng1,C=lat2-lat1,D=lng2-lng1;
+      const dot=A*C+B*D,len=C*C+D*D,t=Math.max(0,Math.min(1,len?dot/len:-1));
+      const nLat=lat1+t*C,nLng=lng1+t*D;
+      const R=3958.8,dLat=(nLat-lat)*Math.PI/180,dLng=(nLng-lng)*Math.PI/180;
+      const a=Math.sin(dLat/2)**2+Math.cos(lat*Math.PI/180)*Math.cos(nLat*Math.PI/180)*Math.sin(dLng/2)**2;
+      return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+    }
+
+    async function findRoute(){
+      if(!startLat||!startLng){alert("Please allow location access or enter a start location!");return;}
+      if(!selectedDest){alert("Please select a destination from the dropdown!");return;}
+      document.getElementById("map-count").textContent="Finding route...";
+      const routeType=currentMode==="walk"?"foot-walking":"driving-car";
+      const routeColor=currentMode==="walk"?"#1D9E75":"#378ADD";
+      try{
+        const res=await fetch(`https://api.openrouteservice.org/v2/directions/${routeType}/geojson`,{
+          method:"POST",
+          headers:{"Content-Type":"application/json","Authorization":ORS_KEY},
+          body:JSON.stringify({coordinates:[[startLng,startLat],[selectedDest.lng,selectedDest.lat]]})
+        });
+        const data=await res.json();
+        if(!data.features||!data.features[0]){alert("No route found!");return;}
+        const coords=data.features[0].geometry.coordinates;
+        if(routeLayer) map.removeLayer(routeLayer);
+        routeLayer=L.polyline(coords.map(c=>[c[1],c[0]]),{color:routeColor,weight:6,opacity:0.85}).addTo(map);
+        if(userMarker) userMarker.setZIndexOffset(2000);
+        if(destMarker) destMarker.setZIndexOffset(1500);
+        map.fitBounds(routeLayer.getBounds(),{padding:[60,60]});
+        const maxDist=currentMode==="walk"?0.5:2;
+        const nearby=allWashrooms.filter(w=>{
+          if(!w.lat||!w.lng) return false;
+          if(currentMode==="car"&&w.mode!=="car") return false;
+          for(let i=0;i<coords.length-1;i++){
+            if(distToSegment(w.lat,w.lng,coords[i][1],coords[i][0],coords[i+1][1],coords[i+1][0])<maxDist) return true;
+          }
+          return false;
+        });
+        renderMapMarkers(nearby,nearby.map(w=>w.id));
+        document.getElementById("map-count").textContent=`${nearby.length} washrooms on route · ${currentMode==="car"?"🚗":"🚶"}`;
+        const panel=document.getElementById("map-nearby");
+        panel.style.display="block";
+        panel.innerHTML=`
+          <div style="font-size:10px;font-weight:700;color:#bbb;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">${currentMode==="car"?"🚗 On your drive":"🚶 On your walk"}</div>
+          ${nearby.slice(0,5).map(w=>`
+            <div style="padding:7px 0;border-bottom:1px solid #f5f5f5;">
+              <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:2px;">${w.name}</div>
+              <div style="font-size:12px;color:${getColor(w.status)};font-weight:600;">${w.status}</div>
+            </div>`).join("")}
+        `;
+      }catch(err){
+        console.error("Route error:",err);
+        alert("Could not find route. Try again!");
+        document.getElementById("map-count").textContent=`${allWashrooms.length} washrooms`;
+      }
+    }
+
+    function clearRoute(){
+      if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;}
+      if(destMarker){map.removeLayer(destMarker);destMarker=null;}
+      if(startMarker){map.removeLayer(startMarker);startMarker=null;}
+      document.getElementById("destination").value="";
+      document.getElementById("start-input").value=userLat?"📍 My current location":"";
+      selectedDest=null;
+      startLat=userLat; startLng=userLng;
+      applyFilters();
+      updateNearbyPanel();
+    }
+
+    fetch("/api/washrooms").then(r=>r.json()).then(data=>{
+      allWashrooms=data;
+      renderCards(data);
+      switchView("map");
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Leave a Review – FlushFind</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; min-height: 100vh; }
+
+    .header { background: white; padding: 16px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #eee; }
+    .back { color: #1D9E75; text-decoration: none; font-size: 20px; }
+    .header-title { font-size: 16px; font-weight: 600; color: #1a1a1a; }
+
+    .main { max-width: 600px; margin: 0 auto; padding: 24px 16px; }
+
+    .form-card { background: white; border-radius: 14px; padding: 24px; border: 1px solid #eee; }
+    .form-title { font-size: 18px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px; }
+    .form-sub { font-size: 13px; color: #888; margin-bottom: 24px; }
+
+    .field { margin-bottom: 18px; }
+    label { font-size: 13px; font-weight: 600; color: #555; display: block; margin-bottom: 6px; }
+    input, textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.15s; }
+    input:focus, textarea:focus { border-color: #1D9E75; }
+    textarea { resize: none; }
+
+    .search-wrapper { position: relative; }
+    .search-wrapper input { width: 100%; }
+    .suggestions { display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 8px; margin-top: 4px; z-index: 999; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-height: 220px; overflow-y: auto; }
+    .suggestion-item { padding: 10px 14px; cursor: pointer; font-size: 13px; color: #1a1a1a; border-bottom: 0.5px solid #f0f0f0; }
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-item:hover { background: #f5f5f0; }
+    .suggestion-item .status { font-size: 11px; font-weight: 600; margin-left: 8px; padding: 1px 6px; border-radius: 10px; }
+    .status-open   { background: #E1F5EE; color: #0F6E56; }
+    .status-busy   { background: #FAEEDA; color: #854F0B; }
+    .status-closed { background: #FCEBEB; color: #A32D2D; }
+    .selected-washroom { display: none; background: #E1F5EE; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #0F6E56; font-weight: 500; margin-top: 6px; }
+
+    .stars { display: flex; gap: 8px; margin-top: 4px; }
+    .star { font-size: 28px; cursor: pointer; color: #ddd; transition: color 0.1s; }
+    .star.lit { color: #EF9F27; }
+
+    .btn { width: 100%; padding: 12px; background: #1D9E75; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    .btn:hover { background: #0F6E56; }
+    .success { display: none; background: #E1F5EE; color: #0F6E56; padding: 12px 16px; border-radius: 8px; margin-top: 16px; font-size: 14px; font-weight: 500; }
+    .error   { display: none; background: #FCEBEB; color: #A32D2D; padding: 12px 16px; border-radius: 8px; margin-top: 16px; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <a class="back" href="/">←</a>
+    <div class="header-title">Leave a Review</div>
+  </div>
+
+  <div class="main">
+    <div class="form-card">
+      <div class="form-title">⭐ Rate a Washroom</div>
+      <div class="form-sub">Help others find clean washrooms!</div>
+
+      <div class="field">
+        <label>Search Washroom</label>
+        <div class="search-wrapper">
+          <input type="text" id="washroom-search" placeholder="🔍 Type to search e.g. Starbucks, LAX..." oninput="searchWashrooms()" autocomplete="off"/>
+          <div class="suggestions" id="suggestions"></div>
+        </div>
+        <div class="selected-washroom" id="selected-washroom"></div>
+      </div>
+
+      <div class="field">
+        <label>Your Name (optional)</label>
+        <input type="text" id="r-user" placeholder="e.g. Priya"/>
+      </div>
+
+      <div class="field">
+        <label>Rating</label>
+        <div class="stars" id="stars">
+          <span class="star" onclick="setStars(1)">★</span>
+          <span class="star" onclick="setStars(2)">★</span>
+          <span class="star" onclick="setStars(3)">★</span>
+          <span class="star" onclick="setStars(4)">★</span>
+          <span class="star" onclick="setStars(5)">★</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Your Review</label>
+        <textarea id="r-text" rows="3" placeholder="How was the cleanliness? Any amenities?"></textarea>
+      </div>
+
+      <button class="btn" onclick="submitReview()">Submit Review</button>
+      <div class="success" id="success-msg">✅ Review submitted! Thank you!</div>
+      <div class="error"   id="error-msg">❌ Please fill in all fields!</div>
+    </div>
+  </div>
+
+  <script>
+    let allWashrooms = [];
+    let selectedWashroom = null;
+    let selectedStars = 0;
+
+    // Load all washrooms
+    fetch("/api/washrooms")
+      .then(r => r.json())
+      .then(data => { allWashrooms = data; });
+
+    function searchWashrooms() {
+      const q = document.getElementById("washroom-search").value.toLowerCase().trim();
+      const box = document.getElementById("suggestions");
+      selectedWashroom = null;
+      document.getElementById("selected-washroom").style.display = "none";
+
+      if (q.length < 1) { box.style.display = "none"; return; }
+
+      const filtered = allWashrooms
+        .filter(w => w.name.toLowerCase().includes(q) || w.location.toLowerCase().includes(q))
+        .slice(0, 8);
+
+      if (!filtered.length) { box.style.display = "none"; return; }
+
+      box.style.display = "block";
+      box.innerHTML = filtered.map(w => `
+        <div class="suggestion-item" onclick="selectWashroom(${w.id})">
+          ${w.name}
+          <span class="status status-${w.status}">${w.status}</span>
+          <span style="font-size:11px;color:#888;display:block;margin-top:2px;">📍 ${w.location}</span>
+        </div>`).join("");
+    }
+
+    function selectWashroom(id) {
+      selectedWashroom = allWashrooms.find(w => w.id === id);
+      document.getElementById("washroom-search").value = selectedWashroom.name;
+      document.getElementById("suggestions").style.display = "none";
+      const sel = document.getElementById("selected-washroom");
+      sel.style.display = "block";
+      sel.innerHTML = `✅ Selected: <b>${selectedWashroom.name}</b> — ${selectedWashroom.location}`;
+    }
+
+    document.addEventListener("click", e => {
+      if (!e.target.closest(".search-wrapper")) {
+        document.getElementById("suggestions").style.display = "none";
+      }
+    });
+
+    function setStars(n) {
+      selectedStars = n;
+      document.querySelectorAll(".star").forEach((s, i) => {
+        s.classList.toggle("lit", i < n);
+      });
+    }
+
+    function submitReview() {
+      if (!selectedWashroom) {
+        document.getElementById("error-msg").textContent = "❌ Please select a washroom!";
+        document.getElementById("error-msg").style.display = "block";
+        return;
+      }
+      if (!selectedStars) {
+        document.getElementById("error-msg").textContent = "❌ Please select a star rating!";
+        document.getElementById("error-msg").style.display = "block";
+        return;
+      }
+      const text = document.getElementById("r-text").value.trim();
+      if (!text) {
+        document.getElementById("error-msg").textContent = "❌ Please write a short review!";
+        document.getElementById("error-msg").style.display = "block";
+        return;
+      }
+
+      fetch(`/api/washrooms/${selectedWashroom.id}/reviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user:  document.getElementById("r-user").value || "Anonymous",
+          stars: selectedStars,
+          text:  text
+        })
+      })
+      .then(r => r.json())
+      .then(() => {
+        document.getElementById("success-msg").style.display = "block";
+        document.getElementById("error-msg").style.display = "none";
+        setTimeout(() => window.location.href = "/", 1500);
+      })
+      .catch(() => {
+        document.getElementById("error-msg").textContent = "❌ Something went wrong. Try again!";
+        document.getElementById("error-msg").style.display = "block";
+      });
+    }
+  </script>
+
+</body>
+</html>

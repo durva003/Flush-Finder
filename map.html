@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Map – FlushFind</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+    .header { background: white; padding: 16px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #eee; position: sticky; top: 0; z-index: 1000; }
+    .back { color: #1D9E75; text-decoration: none; font-size: 20px; }
+    .header-title { font-size: 16px; font-weight: 600; color: #1a1a1a; }
+
+    .route-bar { background: white; padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 8px; align-items: center; z-index: 999; }
+    .route-bar input { flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; outline: none; }
+    .route-bar input:focus { border-color: #1D9E75; }
+    .route-btn { padding: 8px 14px; background: #1D9E75; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+    .route-btn:hover { background: #0F6E56; }
+    .clear-btn { padding: 8px 12px; background: white; color: #888; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; cursor: pointer; }
+
+    #map { height: calc(100vh - 120px); width: 100%; }
+
+    .popup-name { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px; }
+    .popup-location { font-size: 12px; color: #888; margin-bottom: 6px; }
+    .popup-row { display: flex; align-items: center; gap: 8px; }
+    .popup-status { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+    .status-open   { background: #E1F5EE; color: #0F6E56; }
+    .status-busy   { background: #FAEEDA; color: #854F0B; }
+    .status-closed { background: #FCEBEB; color: #A32D2D; }
+    .popup-rating { font-size: 12px; color: #EF9F27; }
+
+    .legend { position: absolute; bottom: 24px; left: 16px; z-index: 1000; background: white; border-radius: 10px; padding: 10px 14px; border: 1px solid #eee; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .legend-title { font-size: 11px; font-weight: 600; color: #888; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: #444; }
+    .legend-item:last-child { margin-bottom: 0; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+    .count-badge { position: absolute; top: 130px; right: 16px; z-index: 1000; background: white; border-radius: 10px; padding: 8px 14px; border: 1px solid #eee; font-size: 12px; color: #444; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .nearby-panel { display: none; position: absolute; bottom: 24px; right: 16px; z-index: 1000; background: white; border-radius: 10px; padding: 12px 14px; border: 1px solid #eee; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); max-width: 220px; }
+    .locating-msg { position: absolute; top: 140px; left: 50%; transform: translateX(-50%); z-index: 1000; background: #378ADD; color: white; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 500; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <a class="back" href="/">←</a>
+    <div class="header-title">🗺️ California Washroom Map</div>
+  </div>
+
+  <div class="route-bar">
+    <div style="flex:1;position:relative;">
+      <input type="text" id="destination" placeholder="🔍 Search destination..." oninput="searchPlaces()" autocomplete="off"/>
+      <div id="suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1px solid #ddd;border-radius:8px;margin-top:4px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:220px;overflow-y:auto;"></div>
+    </div>
+    <button class="route-btn" onclick="findRoute()">Find Route</button>
+    <button class="clear-btn" onclick="clearRoute()">Clear</button>
+  </div>
+
+  <div id="map"></div>
+  <div id="locating-msg" class="locating-msg">📍 Detecting your location...</div>
+
+  <div class="legend">
+    <div class="legend-title">Status</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#1D9E75"></div>Open</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#EF9F27"></div>Busy</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#E24B4A"></div>Closed</div>
+    <div style="border-top:0.5px solid #eee;margin-top:8px;padding-top:8px;">
+      <div class="legend-item"><div style="width:12px;height:12px;background:#378ADD;border-radius:50%;flex-shrink:0;"></div>You</div>
+      <div class="legend-item"><div style="width:12px;height:12px;background:#E24B4A;border-radius:50%;flex-shrink:0;"></div>Destination</div>
+    </div>
+  </div>
+
+  <div class="count-badge" id="count-badge">Loading...</div>
+  <div class="nearby-panel" id="nearby-panel"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjgzOWQ2ZGVkZDVhMTQwMDNhMTY1YjdjNjY5YzM4NTc4IiwiaCI6Im11cm11cjY0In0=";
+
+    const CA_CENTER = [36.7783, -119.4179];
+    const CA_BOUNDS = L.latLngBounds([32.50, -124.50], [42.00, -114.00]);
+
+    const map = L.map("map", {
+      zoomControl: true,
+      attributionControl: false,
+      minZoom: 6,
+      maxZoom: 17,
+      maxBounds: CA_BOUNDS,
+      maxBoundsViscosity: 1.0
+    }).setView(CA_CENTER, 6);
+
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      maxZoom: 19
+    }).addTo(map);
+
+    function getColor(s) {
+      return s === "open" ? "#1D9E75" : s === "busy" ? "#EF9F27" : "#E24B4A";
+    }
+
+    function makeIcon(status, highlight=false) {
+      const size = highlight ? 32 : 26;
+      return L.divIcon({
+        className: "",
+        html: `<div style="
+          width:${size}px;height:${size}px;
+          background:${getColor(status)};
+          border:${highlight?3:2}px solid white;
+          border-radius:50%;
+          box-shadow:0 2px 8px rgba(0,0,0,0.25);
+          cursor:pointer;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-size:${highlight?16:13}px;
+        ">🚻</div>`,
+        iconSize: [size, size],
+        iconAnchor: [size/2, size/2]
+      });
+    }
+
+    const destIcon = L.divIcon({
+      className: "",
+      html: `<div style="width:24px;height:24px;background:#E24B4A;border:3px solid white;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,0.3);"></div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 24]
+    });
+
+    function getDistance(lat1, lng1, lat2, lng2) {
+      const R = 3958.8;
+      const dLat = (lat2-lat1)*Math.PI/180;
+      const dLng = (lng2-lng1)*Math.PI/180;
+      const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+      return (R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))).toFixed(1);
+    }
+
+    function distToSegment(lat, lng, lat1, lng1, lat2, lng2) {
+      const A=lat-lat1, B=lng-lng1, C=lat2-lat1, D=lng2-lng1;
+      const dot=A*C+B*D, len=C*C+D*D;
+      const t=Math.max(0,Math.min(1,len?dot/len:-1));
+      return getDistance(lat, lng, lat1+t*C, lng1+t*D);
+    }
+
+    let allWashrooms=[], markers=[], routeLayer=null, destMarker=null;
+    let userLat=null, userLng=null, selectedDest=null, searchTimeout=null;
+
+    function renderMarkers(washrooms, highlightIds=[]) {
+      markers.forEach(m => map.removeLayer(m));
+      markers = [];
+      washrooms.forEach(w => {
+        const m = L.marker([w.lat, w.lng], { icon: makeIcon(w.status, highlightIds.includes(w.id)) }).addTo(map);
+        m.bindPopup(`
+          <div class="popup-name">${w.name}</div>
+          <div class="popup-location">📍 ${w.location}</div>
+          <div class="popup-row">
+            <span class="popup-status status-${w.status}">${w.status}</span>
+            <span class="popup-rating">⭐ ${w.rating > 0 ? w.rating : "No ratings yet"}</span>
+          </div>`, { maxWidth: 220 });
+        markers.push(m);
+      });
+    }
+
+    function searchPlaces() {
+      const query = document.getElementById("destination").value.trim();
+      const box = document.getElementById("suggestions");
+      selectedDest = null;
+      if (query.length < 3) { box.style.display = "none"; return; }
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(async () => {
+        try {
+          const res = await fetch(
+            `https://api.openrouteservice.org/geocode/autocomplete?api_key=${ORS_KEY}&text=${encodeURIComponent(query)}&boundary.country=US&size=6`
+          );
+          const data = await res.json();
+          if (!data.features?.length) { box.style.display = "none"; return; }
+          box.style.display = "block";
+          box.innerHTML = data.features.map((f, i) => `
+            <div onclick="selectPlace(${i})"
+              data-lat="${f.geometry.coordinates[1]}"
+              data-lng="${f.geometry.coordinates[0]}"
+              data-label="${f.properties.label}"
+              style="padding:10px 14px;cursor:pointer;font-size:13px;color:#1a1a1a;border-bottom:0.5px solid #f0f0f0;"
+              onmouseover="this.style.background='#f5f5f0'"
+              onmouseout="this.style.background='white'">
+              📍 ${f.properties.label}
+            </div>`).join("");
+        } catch(e) { box.style.display = "none"; }
+      }, 300);
+    }
+
+    function selectPlace(i) {
+      const item = document.querySelectorAll("#suggestions div")[i];
+      selectedDest = {
+        lat: parseFloat(item.dataset.lat),
+        lng: parseFloat(item.dataset.lng),
+        label: item.dataset.label
+      };
+      document.getElementById("destination").value = selectedDest.label;
+      document.getElementById("suggestions").style.display = "none";
+      if (destMarker) map.removeLayer(destMarker);
+      destMarker = L.marker([selectedDest.lat, selectedDest.lng], { icon: destIcon })
+        .addTo(map)
+        .bindPopup(`<b>📍 ${selectedDest.label}</b>`).openPopup();
+      map.setView([selectedDest.lat, selectedDest.lng], 12);
+    }
+
+    document.addEventListener("click", e => {
+      if (!e.target.closest(".route-bar")) {
+        document.getElementById("suggestions").style.display = "none";
+      }
+    });
+
+    async function findRoute() {
+      if (!document.getElementById("destination").value.trim()) { alert("Please enter a destination!"); return; }
+      if (!userLat) { alert("Please allow location access first!"); return; }
+      if (!selectedDest) { alert("Please select a location from the dropdown!"); return; }
+      document.getElementById("count-badge").innerHTML = "Finding route...";
+      try {
+        const routeRes = await fetch("https://api.openrouteservice.org/v2/directions/driving-car/geojson", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": ORS_KEY },
+          body: JSON.stringify({ coordinates: [[userLng, userLat], [selectedDest.lng, selectedDest.lat]] })
+        });
+        const routeData = await routeRes.json();
+        const coords = routeData.features[0].geometry.coordinates;
+        if (routeLayer) map.removeLayer(routeLayer);
+        routeLayer = L.polyline(coords.map(c => [c[1],c[0]]), {
+          color: "#378ADD", weight: 5, opacity: 0.75
+        }).addTo(map);
+        map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+
+        const nearby = allWashrooms.filter(w => {
+          for (let i = 0; i < coords.length-1; i++) {
+            if (distToSegment(w.lat, w.lng, coords[i][1], coords[i][0], coords[i+1][1], coords[i+1][0]) < 2)
+              return true;
+          }
+          return false;
+        });
+
+        renderMarkers(allWashrooms, nearby.map(w => w.id));
+        document.getElementById("count-badge").innerHTML = `${nearby.length} washrooms on route`;
+
+        const panel = document.getElementById("nearby-panel");
+        panel.style.display = "block";
+        panel.innerHTML = `
+          <div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">On your route</div>
+          ${nearby.slice(0,5).map(w=>`
+            <div style="padding:6px 0;border-bottom:0.5px solid #f0f0f0;">
+              <div style="font-size:13px;font-weight:600;color:#1a1a1a;">${w.name}</div>
+              <div style="font-size:12px;color:${getColor(w.status)}">${w.status}</div>
+            </div>`).join("")}
+        `;
+      } catch(err) {
+        console.error(err);
+        alert("Could not find route. Try again!");
+        document.getElementById("count-badge").innerHTML = `${allWashrooms.length} washrooms`;
+      }
+    }
+
+    function clearRoute() {
+      if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+      if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
+      renderMarkers(allWashrooms);
+      document.getElementById("destination").value = "";
+      selectedDest = null;
+      document.getElementById("count-badge").innerHTML =
+        `${allWashrooms.length} washrooms · ${allWashrooms.filter(w=>w.status==="open").length} open`;
+      document.getElementById("nearby-panel").style.display = "none";
+    }
+
+    fetch("/api/washrooms")
+      .then(r => r.json())
+      .then(data => {
+        allWashrooms = data.filter(w => w.lat !== 0 && w.lng !== 0);
+        document.getElementById("count-badge").innerHTML =
+          `${allWashrooms.length} washrooms · ${allWashrooms.filter(w=>w.status==="open").length} open`;
+        renderMarkers(allWashrooms);
+
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(pos => {
+            userLat = pos.coords.latitude;
+            userLng = pos.coords.longitude;
+            document.getElementById("locating-msg").style.display = "none";
+            const userIcon = L.divIcon({
+              className: "",
+              html: `<div style="width:16px;height:16px;background:#378ADD;border:3px solid white;border-radius:50%;box-shadow:0 0 0 4px rgba(55,138,221,0.3);"></div>`,
+              iconSize: [16,16], iconAnchor: [8,8]
+            });
+            L.marker([userLat, userLng], { icon: userIcon }).addTo(map)
+              .bindPopup("<b>📍 You are here</b>").openPopup();
+            map.setView([userLat, userLng], 11);
+
+            const nearby = allWashrooms
+              .map(w => ({ ...w, dist: getDistance(userLat, userLng, w.lat, w.lng) }))
+              .sort((a,b) => a.dist - b.dist)
+              .slice(0, 3);
+
+            const panel = document.getElementById("nearby-panel");
+            panel.style.display = "block";
+            panel.innerHTML = `
+              <div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Nearest to you</div>
+              ${nearby.map(w=>`
+                <div style="padding:6px 0;border-bottom:0.5px solid #f0f0f0;">
+                  <div style="font-size:13px;font-weight:600;color:#1a1a1a;">${w.name}</div>
+                  <div style="font-size:12px;color:#888;">${w.dist} mi · <span style="color:${getColor(w.status)}">${w.status}</span></div>
+                </div>`).join("")}
+            `;
+          }, () => {
+            document.getElementById("locating-msg").textContent = "⚠️ Location access denied";
+            setTimeout(() => document.getElementById("locating-msg").style.display = "none", 3000);
+          });
+        }
+      });
+  </script>
+
+</body>
+</html>
